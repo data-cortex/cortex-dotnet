@@ -4,30 +4,16 @@ using System.Management;
 using System.Runtime.InteropServices;
 
 internal static class MachineTools {
-  public static string GetMachineIdentifier() {
+  public static string? GetMachineIdentifier() {
     var adid = TryGetAdvertisingId();
-    Logger.Info("adid {0}", adid);
     if (adid != null) {
       return adid;
     }
     var smbios = TryGetWmi("Win32_ComputerSystemProduct", "UUID");
-    Logger.Info("smbios {0}", smbios);
-    var board = TryGetWmi("Win32_BaseBoard", "SerialNumber");
-    Logger.Info("board {0}", board);
-    var bios = TryGetWmi("Win32_BIOS", "SerialNumber");
-    Logger.Info("bios {0}", bios);
-
     if (smbios != null) {
-      return Normalize(smbios);
+      return smbios;
     }
-    if (board != null) {
-      return HashHex(board);
-    }
-    if (bios != null) {
-      return HashHex(bios);
-    }
-    Logger.Info("guid");
-    return Guid.NewGuid().ToString();
+    return null;
   }
   public static string? TryGetAdvertisingId() {
     try {
@@ -45,7 +31,7 @@ internal static class MachineTools {
       var value = property.GetValue(null);
       if (value is string ad_id) {
         if (!string.IsNullOrEmpty(ad_id)) {
-          return ad_id;
+          return ValidHardwareId(ad_id);
         }
       }
     } catch {
@@ -66,13 +52,12 @@ internal static class MachineTools {
     return null;
   }
   private static string? ValidHardwareId(string? id) {
-    Logger.Info("ValidHardwareId: {0}", id);
     if (id == null) {
       return null;
     } else if (string.IsNullOrWhiteSpace(id)) {
       return null;
     }
-    id = id.ToLowerInvariant();
+    id = id.Trim().ToLowerInvariant();
     if (id == "ffffffff-ffff-ffff-ffff-ffffffffffff") {
       return null;
     } else if (id == "unknown") {
@@ -84,17 +69,7 @@ internal static class MachineTools {
     }
     return id;
   }
-  private static string Normalize(string uuid) {
-    return uuid.Trim().ToLowerInvariant();
-  }
 
-  private static string HashHex(string input) {
-    using (var sha256 = System.Security.Cryptography.SHA256.Create()) {
-      var bytes = System.Text.Encoding.UTF8.GetBytes(input);
-      var hash = sha256.ComputeHash(bytes);
-      return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-    }
-  }
   public static string? GetModel() {
     try {
       using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem")) {
@@ -117,9 +92,7 @@ internal static class MachineTools {
           return ret;
         }
       }
-    } catch (Exception ex) {
-      Logger.Error("GetModel: err: {0}", ex);
-    }
+    } catch { }
     return null;
   }
   public static string? GetLocalAppDataPath() {
@@ -169,9 +142,7 @@ internal static class MachineTools {
       {
         return new Version(osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
       }
-    } catch (Exception ex) {
-      Logger.Error("GetOSVersion threw: {0}", ex);
-    }
+    } catch { }
     return Environment.OSVersion.Version; // fallback
   }
 }

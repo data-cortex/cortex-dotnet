@@ -15,7 +15,6 @@ internal class Settings {
     } else {
       _regRoot = root;
     }
-    Logger.Info("_regRoot: {0}", _regRoot);
   }
   public void Save<T>(string name, T value) {
     using (RegistryKey? key = Registry.CurrentUser?.CreateSubKey(_regRoot)) {

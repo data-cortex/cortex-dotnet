@@ -1,8 +1,8 @@
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace DataCortex {
   public static class DCShared {
@@ -22,11 +22,23 @@ namespace DataCortex {
       }
       Instance.Event(e);
     }
-    public static void Economy(DCEvent e) {
+    public static void Economy(DCEconomy e) {
       if (Instance == null) {
         throw new Exception("Not initialized");
       }
       Instance.Economy(e);
+    }
+    public static void MessageSend(DCMessageSend e) {
+      if (Instance == null) {
+        throw new Exception("Not initialized");
+      }
+      Instance.MessageSend(e);
+    }
+    public static void MessageClick(DCMessageClick e) {
+      if (Instance == null) {
+        throw new Exception("Not initialized");
+      }
+      Instance.MessageClick(e);
     }
     public static void Log(DCLogEvent e) {
       if (Instance == null) {
@@ -45,6 +57,13 @@ namespace DataCortex {
         throw new Exception("Not initialized");
       }
       Instance.LogError(format, args);
+    }
+
+    public static async Task Flush() {
+      if (Instance == null) {
+        throw new Exception("Not initialized");
+      }
+      await Instance.Flush();
     }
   }
   public class DCClient {
@@ -76,7 +95,6 @@ namespace DataCortex {
     private readonly EventSender _eventSender;
     private readonly LogSender _logSender;
 
-    internal string _deviceTag;
     internal string _appVersion;
     internal string _os;
     internal string _osVersion;
@@ -85,6 +103,7 @@ namespace DataCortex {
     internal string _language;
     internal string _country;
 
+    internal string _deviceTag;
     internal string? _userTag;
     internal string? _facebookTag;
     internal string? _twitterTag;
@@ -98,6 +117,16 @@ namespace DataCortex {
     internal DateTime _lastEventSendAttemptTime;
     internal DateTime _lastLogSendAttemptTime;
 
+    public string DeviceTag {
+      get { return _deviceTag; }
+      set {
+        var temp = ValueCopy(value, TAG_MAX_LENGTH);
+        if (temp == null) {
+          throw new ArgumentException("Device Tag cant be null");
+        }
+        _deviceTag = temp;
+      }
+    }
     public string? UserTag {
       get { return _userTag; }
       set { _userTag = TagSave(value, ""); }
@@ -154,13 +183,8 @@ namespace DataCortex {
 
       _appVersion =
           Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "Unknown";
-      if (_appVersion.Split('.').Length > 3) {
-        _appVersion = string.Join(".", _appVersion.Split('.').Take(3));
-      }
-
       _os = GetOSType();
       var os_ver = MachineTools.GetOSVersion();
-      Logger.Info("os_ver: {0}", os_ver);
       _osVersion = $"{os_ver.Major}.{os_ver.Minor}.{os_ver.Build}";
       _deviceType = MachineTools.GetModel() ?? "unknown";
       _deviceFamily = GetDeviceFamily();
@@ -176,7 +200,7 @@ namespace DataCortex {
       _eventSender = new EventSender(this);
       _logSender = new LogSender(this);
       if (!_settings.Load<bool>(INSTALL_SENT_KEY)) {
-        Event(new DCEvent { Kingdom = "organic" });
+        Event(new DCEvent { Type = "install", Kingdom = "organic" });
         _settings.Save(INSTALL_SENT_KEY, true);
       }
     }
@@ -184,8 +208,18 @@ namespace DataCortex {
       ValidateEvent(e);
       _eventSender.AddEvent(e);
     }
-    public void Economy(DCEvent e) {
+    public void Economy(DCEconomy e) {
       e.Type = "economy";
+      ValidateEvent(e);
+      _eventSender.AddEvent(e);
+    }
+    public void MessageSend(DCMessageSend e) {
+      e.Type = "message_send";
+      ValidateEvent(e);
+      _eventSender.AddEvent(e);
+    }
+    public void MessageClick(DCMessageClick e) {
+      e.Type = "message_click";
       ValidateEvent(e);
       _eventSender.AddEvent(e);
     }
@@ -201,7 +235,11 @@ namespace DataCortex {
       var s = string.Format(CultureInfo.InvariantCulture, format, args);
       _logSender.AddEvent(new DCLogEvent { LogLine = s });
     }
-
+    public async Task Flush() {
+      while (!await _eventSender.IsEmpty() && !await _logSender.IsEmpty()) {
+        await Task.Delay(100);
+      }
+    }
     private string? GetSavedUserTagWithName(string name = "") {
       string key = USER_TAG_PREFIX_KEY + name;
       return _settings.Load<string>(key);
@@ -219,13 +257,13 @@ namespace DataCortex {
     private string? TrimString(string s, int max_len) {
       return s != null && s.Length > max_len ? s.Substring(0, max_len) : s;
     }
-    private void ValidateEvent(DCEvent e) {
-      if (e.Type == "economy") {
-        if (e.SpendCurrency == null) {
+    private void ValidateEvent(DCAllEvent e) {
+      if (e is DCEconomy econ) {
+        if (econ.SpendCurrency == null) {
           throw new ArgumentException(
               "spendCurrency is required for economy events");
         }
-        if (!e.SpendAmount.HasValue) {
+        if (!econ.SpendAmount.HasValue) {
           throw new ArgumentException(
               "Missing required value spendAmount for economy event");
         }
@@ -239,16 +277,11 @@ namespace DataCortex {
     private string GetOSType() {
       if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
         return "win32";
-      }
-
-      if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
+      } else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
         return "darwin";
-      }
-
-      if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
+      } else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
         return "linux";
       }
-
       return "unknown";
     }
     private string GetDeviceFamily() {

@@ -12,17 +12,12 @@ using System.Text.Json.Serialization;
 using DataCortex;
 
 internal abstract class Sender<T> {
+  private const string DATE_FORMAT = "yyyy-MM-ddTHH:mm:ss.fffZ";
   private const double DELAY_MAX_INTERVAL = 30.0;
   private const double DELAY_MIN_INTERVAL = 1.0;
   private readonly TimeSpan CHECK_INTERVAL = TimeSpan.FromSeconds(1.0);
   private const int HTTP_TIMEOUT = 60;
   private const int BATCH_COUNT = 10;
-
-  internal readonly JsonSerializerOptions JSON_OPTIONS =
-      new JsonSerializerOptions {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Converters = { new CustomDateTimeConverter() }
-      };
 
   private readonly string _name;
   private readonly string _apiPath;
@@ -53,8 +48,16 @@ internal abstract class Sender<T> {
   }
   public virtual void AddEventQueue(T e) { _list.Add(e); }
 
+  public Task<bool> IsEmpty() {
+    var task = new TaskCompletionSource<bool>();
+    _queue.Run(() => {
+      task.SetResult(!_list.Any() && !_isRunning);
+    });
+    return task.Task;
+  }
+
   private string GetISO8601Date() => DateTime.UtcNow.ToString(
-      "yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture.DateTimeFormat);
+      DATE_FORMAT, CultureInfo.InvariantCulture.DateTimeFormat);
 
   private void CheckAndSend() {
     if (_list.Any() && (DateTime.UtcNow - _lastSendAttemptTime).TotalSeconds >=
@@ -83,18 +86,15 @@ internal abstract class Sender<T> {
 
   private async Task SendInternal(ImmutableList<T> list) {
     var urlString = $"{_dc._baseURL}{_apiPath}?current_time={GetISO8601Date()}";
-    Logger.Info("urlString: {0}", urlString);
     var url = new Uri(urlString);
     using (var client = new HttpClient {
-      Timeout = TimeSpan.FromSeconds(
-                                             HTTP_TIMEOUT)
+      Timeout = TimeSpan.FromSeconds(HTTP_TIMEOUT)
     }) {
       var request = new HttpRequestMessage(HttpMethod.Post, url);
       request.Headers.Add("Accept", "application/json");
       var json = MakePayload(list);
-      Logger.Info("json: {0}", json);
       request.Content =
-          new StringContent(json, Encoding.UTF8, "application/json");
+        new StringContent(json, Encoding.UTF8, "application/json");
       bool resend = false;
       bool is_error = true;
       try {
@@ -119,14 +119,13 @@ internal abstract class Sender<T> {
           }
         }
       } catch (HttpRequestException ex) {
-        Logger.Error("Error from URL: {0}", ex.Message);
+        Logger.Error("Error from URL: {0}", ex);
         resend = true;
       } catch (TaskCanceledException ex) {
-        Logger.Error("HTTP Request Timeout: {0}", ex.Message);
+        Logger.Error("HTTP Request Timeout: {0}", ex);
         resend = true;
       } catch (Exception ex) {
-        Logger.Error("An unexpected error occurred during send: {0}",
-                     ex.Message);
+        Logger.Error("An unexpected error occurred during send: {0}", ex);
         resend = true;
       }
       if (resend) {
@@ -164,7 +163,6 @@ internal abstract class Sender<T> {
       double factor = Math.Pow(2, _errorCount - 1);
       _sendInterval = Math.Min(DELAY_MAX_INTERVAL, DELAY_MIN_INTERVAL * factor);
     }
-    Logger.Info("_sendInterval: {0}", _sendInterval);
   }
   private void MaybeSave() {
     if (_dc._storageRoot != null && !_isSaving && _isDirty) {
@@ -184,10 +182,10 @@ internal abstract class Sender<T> {
   private async Task Save(ImmutableList<T> save_list) {
     try {
       string path = Path.Combine(_dc._storageRoot, $"{_name}.json");
-      Logger.Info("path: {0}", path);
       if (save_list.Any()) {
         string temp = path + ".tmp";
-        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true)) {
+        using (var stream = new FileStream(temp, FileMode.Create,
+            FileAccess.Write, FileShare.None, 4096, useAsync: true)) {
           await JsonSerializer.SerializeAsync(stream, save_list);
           await stream.FlushAsync();
         }
@@ -224,11 +222,10 @@ internal abstract class Sender<T> {
   }
 
   public class CustomDateTimeConverter : JsonConverter<DateTime> {
-    private const string FORMAT = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
     public override void Write(Utf8JsonWriter writer, DateTime value,
                                JsonSerializerOptions options) {
-      writer.WriteStringValue(value.ToUniversalTime().ToString(FORMAT));
+      writer.WriteStringValue(value.ToUniversalTime().ToString(DATE_FORMAT));
     }
     public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert,
                                   JsonSerializerOptions options) {

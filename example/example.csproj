@@ -3,7 +3,8 @@
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net4.8</TargetFramework>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net48</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
