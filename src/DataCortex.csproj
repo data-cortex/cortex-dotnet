@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <PackageId>DataCortex</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Jim Lake</Authors>
+    <Description>Data Cortex Client Library</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/data-cortex/cortex-dotnet</RepositoryUrl>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Management" />
+    <PackageReference Include="System.Text.Json" Version="4.7.2" />
+    <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.6" />
+    <PackageReference Include="System.Collections.Immutable" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+  </ItemGroup>
+</Project>
