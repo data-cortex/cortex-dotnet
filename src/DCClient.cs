@@ -67,23 +67,19 @@ namespace DataCortex {
     }
   }
   public class DCClient {
-    private const int DAU_INTERVAL = 10 * 60;
-    private const double DELAY_RETRY_INTERVAL = 30.0;
-    private const double DELAY_SEND_INTERVAL = 1.0;
-    private const int HTTP_TIMEOUT = 60;
+    private const string DATE_FORMAT = "yyyy-MM-dd";
     private const string API_BASE_URL = "https://api.data-cortex.com";
     private const int TAG_MAX_LENGTH = 62;
     private const int CONFIG_VER_MAX_LENGTH = 16;
     private const int SERVER_VER_MAX_LENGTH = 16;
     private const int GROUP_TAG_MAX_LENGTH = 32;
     private const int TAXONOMY_MAX_LENGTH = 32;
-    private const int BATCH_COUNT = 10;
     private const string USER_TAG_PREFIX_KEY = "UserTag";
-    private const string EVENT_LIST_KEY = "data_cortex_eventList";
     private const string DEVICE_TAG_KEY = "DeviceTag";
-    private const string USER_TAG_KEY = "UserTag";
     private const string INSTALL_SENT_KEY = "InstallSent";
     private const string LAST_DAU_SEND_KEY = "LastDAUSend";
+
+    private readonly TimeSpan DAU_CHECK_INTERVAL = TimeSpan.FromSeconds(10 * 60);
 
     internal readonly string _apiKey;
     internal readonly string _organization;
@@ -112,10 +108,7 @@ namespace DataCortex {
     internal string? _serverVersion;
     internal string? _configVersion;
 
-    internal DateTime _lastDAUSend;
-    internal DateTime _lastDauCheckTime;
-    internal DateTime _lastEventSendAttemptTime;
-    internal DateTime _lastLogSendAttemptTime;
+    internal string _lastDAUSend;
 
     public string DeviceTag {
       get { return _deviceTag; }
@@ -164,7 +157,13 @@ namespace DataCortex {
       _settings = new Settings(registryRoot);
       _storageRoot = _storageRoot ?? MachineTools.GetLocalAppDataPath();
 
-      _lastDAUSend = _settings.Load<DateTime>(LAST_DAU_SEND_KEY);
+      var last_dau_date = _settings.Load<DateTime>(LAST_DAU_SEND_KEY);
+      if (last_dau_date != null) {
+        _lastDAUSend = TimeZoneInfo.ConvertTimeFromUtc(last_dau_date,
+            _dauTimeZone).ToString(DATE_FORMAT, CultureInfo.InvariantCulture);
+      } else {
+        _lastDAUSend = "";
+      }
 
       _userTag = GetSavedUserTagWithName("");
       _facebookTag = GetSavedUserTagWithName("Facebook");
@@ -193,16 +192,13 @@ namespace DataCortex {
 
       _baseURL = $"{API_BASE_URL}/{_organization}";
 
-      _lastDauCheckTime = DateTime.MinValue;
-      _lastEventSendAttemptTime = DateTime.MinValue;
-      _lastLogSendAttemptTime = DateTime.MinValue;
-
       _eventSender = new EventSender(this);
       _logSender = new LogSender(this);
       if (!_settings.Load<bool>(INSTALL_SENT_KEY)) {
         Event(new DCEvent { Type = "install", Kingdom = "organic" });
         _settings.Save(INSTALL_SENT_KEY, true);
       }
+      Task.Run(DauLoop);
     }
     public void Event(DCEvent e) {
       ValidateEvent(e);
@@ -272,6 +268,26 @@ namespace DataCortex {
     private void ValidateLogEvent(DCLogEvent e) {
       if (e.LogLine == null || e.LogLine.Length == 0) {
         throw new ArgumentException("LogLine is required");
+      }
+    }
+    public async Task DauLoop() {
+      while (true) {
+        try {
+          DateTime now = DateTime.UtcNow;
+          string nowString = TimeZoneInfo.ConvertTimeFromUtc(now, _dauTimeZone)
+            .ToString(DATE_FORMAT, CultureInfo.InvariantCulture);
+          if (!_lastDAUSend.Equals(nowString, StringComparison.Ordinal)) {
+            _lastDAUSend = nowString;
+            _settings.Save(LAST_DAU_SEND_KEY, now);
+            Logger.Info("DauLoop: Sending DAU event for date: {0}", nowString);
+            Event(new DCEvent { Type = "dau" });
+          }
+          await Task.Delay(DAU_CHECK_INTERVAL);
+        } catch (TaskCanceledException) {
+          break;
+        } catch (Exception ex) {
+          Logger.Error("DauLoop threw: {0}", ex);
+        }
       }
     }
     private string GetOSType() {
