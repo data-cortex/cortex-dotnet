@@ -1,10 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using DataCortex;
 
 internal class LogSender : Sender<DCLogEvent> {

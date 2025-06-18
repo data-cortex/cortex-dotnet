@@ -5,13 +5,10 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Threading.Tasks;
-using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Win32;
 using DataCortex;
 
 internal abstract class Sender<T> {
@@ -27,23 +24,30 @@ internal abstract class Sender<T> {
         Converters = { new CustomDateTimeConverter() }
       };
 
-  internal DCClient _dc;
-  private string _path;
-  private List<T> _list = new List<T>();
-  private SerialTaskQueue _queue;
+  private readonly string _name;
+  private readonly string _apiPath;
+  internal readonly DCClient _dc;
+  private readonly List<T> _list;
+  private readonly SerialTaskQueue _queue;
   private DateTime _lastSendAttemptTime = DateTime.MinValue;
   private bool _isRunning = false;
+  private bool _isDirty = false;
+  private bool _isSaving = false;
   private int _errorCount = 0;
   private double _sendInterval = DELAY_MIN_INTERVAL;
 
-  public Sender(string name, string path, DCClient dc) {
-    _queue = new SerialTaskQueue(name);
-    _path = path;
+  public Sender(string name, string apiPath, DCClient dc) {
+    _name = name;
+    _apiPath = apiPath;
     _dc = dc;
+    _list = Load();
+    _queue = new SerialTaskQueue(name);
   }
   public void AddEvent(T e) {
     _queue.Run(() => {
       AddEventQueue(e);
+      _isDirty = true;
+      MaybeSave();
       CheckAndSend();
     });
   }
@@ -78,7 +82,7 @@ internal abstract class Sender<T> {
   internal abstract string MakePayload(ImmutableList<T> list);
 
   private async Task SendInternal(ImmutableList<T> list) {
-    var urlString = $"{_dc._baseURL}{_path}?current_time={GetISO8601Date()}";
+    var urlString = $"{_dc._baseURL}{_apiPath}?current_time={GetISO8601Date()}";
     Logger.Info("urlString: {0}", urlString);
     var url = new Uri(urlString);
     using (var client = new HttpClient {
@@ -140,6 +144,8 @@ internal abstract class Sender<T> {
     }
     CalcInterval();
     _isRunning = false;
+    _isDirty = true;
+    MaybeSave();
     CheckAndSend();
   }
   private void RequeueList(ImmutableList<T> listToResend) {
@@ -147,6 +153,8 @@ internal abstract class Sender<T> {
     _list.InsertRange(0, listToResend);
     CalcInterval();
     _isRunning = false;
+    _isDirty = true;
+    MaybeSave();
     CheckAndSend();
   }
   private void CalcInterval() {
@@ -158,6 +166,60 @@ internal abstract class Sender<T> {
     }
     Logger.Info("_sendInterval: {0}", _sendInterval);
   }
+  private void MaybeSave() {
+    if (_dc._storageRoot != null && !_isSaving && _isDirty) {
+      _isSaving = true;
+      var save_list = _list.ToImmutableList();
+      _isDirty = false;
+      Task.Run(async () => {
+        await Save(save_list);
+        _queue.Run(SaveDone);
+      });
+    }
+  }
+  private void SaveDone() {
+    _isSaving = false;
+    MaybeSave();
+  }
+  private async Task Save(ImmutableList<T> save_list) {
+    try {
+      string path = Path.Combine(_dc._storageRoot, $"{_name}.json");
+      Logger.Info("path: {0}", path);
+      if (save_list.Any()) {
+        string temp = path + ".tmp";
+        using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true)) {
+          await JsonSerializer.SerializeAsync(stream, save_list);
+          await stream.FlushAsync();
+        }
+        if (File.Exists(path)) {
+          File.Replace(temp, path, null);
+        } else {
+          File.Move(temp, path);
+        }
+      } else {
+        File.Delete(path);
+      }
+    } catch (Exception ex) {
+      Logger.Error("Sender.Save error: {0}", ex);
+    }
+  }
+  private List<T> Load() {
+    try {
+      if (_dc._storageRoot == null) {
+        return new List<T>();
+      }
+      string path = Path.Combine(_dc._storageRoot, $"{_name}.json");
+      if (!File.Exists(path)) {
+        return new List<T>();
+      }
+      string json = File.ReadAllText(path);
+      return JsonSerializer.Deserialize<List<T>>(json);
+    } catch (Exception ex) {
+      Logger.Error("Sender.Load error: {0}", ex);
+    }
+    return new List<T>();
+  }
+
   public class CustomDateTimeConverter : JsonConverter<DateTime> {
     private const string FORMAT = "yyyy-MM-ddTHH:mm:ss.fffZ";
 

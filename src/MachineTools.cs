@@ -251,7 +251,6 @@ internal static class MachineTools {
     }
     return ret;
   }
-
   private static string Sanitize(string name) {
     foreach (char c in Path.GetInvalidFileNameChars())
       name = name.Replace(c, '_');

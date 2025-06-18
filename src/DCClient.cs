@@ -1,12 +1,7 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Reflection;
-using System.Threading.Tasks;
-using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 
 namespace DataCortex {
@@ -177,12 +172,12 @@ namespace DataCortex {
       _lastEventSendAttemptTime = DateTime.MinValue;
       _lastLogSendAttemptTime = DateTime.MinValue;
 
+      _eventSender = new EventSender(this);
+      _logSender = new LogSender(this);
       if (!_settings.Load<bool>(INSTALL_SENT_KEY)) {
         Event(new DCEvent { Kingdom = "organic" });
         _settings.Save(INSTALL_SENT_KEY, true);
       }
-      _eventSender = new EventSender(this);
-      _logSender = new LogSender(this);
     }
     public void Event(DCEvent e) {
       ValidateEvent(e);
