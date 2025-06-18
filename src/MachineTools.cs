@@ -1,8 +1,6 @@
 using System;
-using System.Collections;
-using System.Linq;
 using System.IO;
-using System.Reflection;
+using System.Management;
 using System.Runtime.InteropServices;
 
 internal static class MachineTools {
@@ -12,25 +10,21 @@ internal static class MachineTools {
     if (adid != null) {
       return adid;
     }
-    var smbios = TryGetWmiDynamic("Win32_ComputerSystemProduct", "UUID");
+    var smbios = TryGetWmi("Win32_ComputerSystemProduct", "UUID");
     Logger.Info("smbios {0}", smbios);
+    var board = TryGetWmi("Win32_BaseBoard", "SerialNumber");
+    Logger.Info("board {0}", board);
+    var bios = TryGetWmi("Win32_BIOS", "SerialNumber");
+    Logger.Info("bios {0}", bios);
+
     if (smbios != null) {
       return Normalize(smbios);
     }
-    var board = TryGetWmiDynamic("Win32_BaseBoard", "SerialNumber");
-    Logger.Info("board {0}", board);
     if (board != null) {
       return HashHex(board);
     }
-    var bios = TryGetWmiDynamic("Win32_BIOS", "SerialNumber");
-    Logger.Info("bios {0}", bios);
     if (bios != null) {
       return HashHex(bios);
-    }
-    var volume = TryGetVolumeSerialDynamic("C");
-    Logger.Info("volume {0}", volume);
-    if (volume != null) {
-      return HashHex(volume);
     }
     Logger.Info("guid");
     return Guid.NewGuid().ToString();
@@ -58,113 +52,21 @@ internal static class MachineTools {
     }
     return null;
   }
-  private static string? TryGetWmiDynamic(string className,
-                                          string propertyName) {
+  private static string? TryGetWmi(string className, string property) {
     try {
-      var sysMgmt = Assembly.Load("System.Management");
-      if (sysMgmt == null) {
-        return null;
-      }
-      var mgmtClassType = sysMgmt.GetType("System.Management.ManagementClass");
-      if (mgmtClassType == null) {
-        return null;
-      }
-      var mgmtClassInstance =
-          Activator.CreateInstance(mgmtClassType, new object[] { className });
-      if (mgmtClassInstance == null) {
-        return null;
-      }
-      var getInstancesMethod = mgmtClassType.GetMethod("GetInstances");
-      var instances =
-          getInstancesMethod?.Invoke(mgmtClassInstance, null)
-              as System.Collections.IEnumerable;
-      if (instances == null) {
-        return null;
-      }
-      foreach (var instance in instances) {
-        var mgmtObjType = sysMgmt.GetType("System.Management.ManagementObject");
-        if (mgmtObjType == null) {
-          return null;
-        }
-        var propertiesProp = mgmtObjType.GetProperty("Properties");
-        var properties = propertiesProp?.GetValue(instance);
-        if (properties == null) {
-          return null;
-        }
-        var propDataCollectionType =
-            sysMgmt.GetType("System.Management.PropertyDataCollection");
-        if (propDataCollectionType == null) {
-          return null;
-        }
-        var itemProp = propDataCollectionType.GetProperty("Item");
-        var propertyData =
-            itemProp?.GetValue(properties, new object[] { propertyName });
-        if (propertyData == null) {
-          return null;
-        }
-        var propertyDataType =
-            sysMgmt.GetType("System.Management.PropertyData");
-        var valueProp = propertyDataType.GetProperty("Value");
-        var val = valueProp?.GetValue(propertyData);
-
-        if (val != null) {
-          return ValidHardwareId(val.ToString());
+      using (var searcher = new ManagementClass(className)) {
+        foreach (ManagementObject mo in searcher.GetInstances()) {
+          var value = mo[property]?.ToString()?.Trim();
+          if (!string.IsNullOrEmpty(value)) {
+            return ValidHardwareId(value);
+          }
         }
       }
-    } catch {
-    }
-
-    return null;
-  }
-
-  private static string? TryGetVolumeSerialDynamic(string driveLetter) {
-    try {
-      var sysMgmt = Assembly.Load("System.Management");
-      if (sysMgmt == null) {
-        return null;
-      }
-      var mgmtObjType = sysMgmt.GetType("System.Management.ManagementObject");
-      if (mgmtObjType == null) {
-        return null;
-      }
-      var mgmtObjInstance = Activator.CreateInstance(
-          mgmtObjType,
-          new object[] { $"Win32_LogicalDisk.DeviceID=\"{driveLetter}:\"" });
-      if (mgmtObjInstance == null) {
-        return null;
-      }
-
-      var getMethod = mgmtObjType.GetMethod("Get");
-      getMethod?.Invoke(mgmtObjInstance, null);
-
-      var propertiesProp = mgmtObjType.GetProperty("Properties");
-      var properties = propertiesProp?.GetValue(mgmtObjInstance);
-      if (properties == null) {
-        return null;
-      }
-      var propDataCollectionType =
-          sysMgmt.GetType("System.Management.PropertyDataCollection");
-      if (propDataCollectionType == null) {
-        return null;
-      }
-      var itemProp = propDataCollectionType.GetProperty("Item");
-      var propertyData =
-          itemProp?.GetValue(properties, new object[] { "VolumeSerialNumber" });
-      if (propertyData == null) {
-        return null;
-      }
-      var propertyDataType = sysMgmt.GetType("System.Management.PropertyData");
-      var valueProp = propertyDataType.GetProperty("Value");
-      var val = valueProp?.GetValue(propertyData);
-      if (val != null) {
-        return ValidHardwareId(val.ToString());
-      }
-    } catch {
-    }
-
+    } catch { }
     return null;
   }
   private static string? ValidHardwareId(string? id) {
+    Logger.Info("ValidHardwareId: {0}", id);
     if (id == null) {
       return null;
     } else if (string.IsNullOrWhiteSpace(id)) {
@@ -194,53 +96,30 @@ internal static class MachineTools {
     }
   }
   public static string? GetModel() {
-    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-      return null;
-    }
-
     try {
-      var managementAssembly =
-          AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(
-              a => a.GetName().Name == "System.Management") ??
-          Assembly.Load("System.Management");
-
-      if (managementAssembly == null) {
-        return null;
+      using (var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_ComputerSystem")) {
+        foreach (ManagementObject mo in searcher.Get()) {
+          var manufacturer = mo["Manufacturer"]?.ToString()?.Trim();
+          var model = mo["Model"]?.ToString()?.Trim();
+          string? ret = "";
+          if (manufacturer != null && manufacturer.Length > 0) {
+            ret += manufacturer;
+          }
+          if (model != null && model.Length > 0) {
+            if (ret.Length > 0) {
+              ret += "_";
+            }
+            ret += model;
+          }
+          if (ret.Length == 0) {
+            ret = null;
+          }
+          return ret;
+        }
       }
-
-      var searcherType = managementAssembly.GetType(
-          "System.Management.ManagementObjectSearcher");
-      var objectType =
-          managementAssembly.GetType("System.Management.ManagementObject");
-
-      if (searcherType == null || objectType == null) {
-        return null;
-      }
-
-      using var searcher = (IDisposable)Activator.CreateInstance(
-          searcherType, "SELECT * FROM Win32_ComputerSystem");
-
-      var getMethod = searcherType.GetMethod("Get");
-      var results = getMethod.Invoke(searcher, null) as IEnumerable;
-
-      if (results == null) {
-        return null;
-      }
-
-      foreach (var mo in results) {
-        var itemProperty = mo.GetType().GetProperty("Item");
-        var manufacturer =
-            itemProperty?.GetValue(mo, new object[] { "Manufacturer" })
-                ?.ToString()
-                ?.Trim();
-        var model = itemProperty?.GetValue(mo, new object[] { "Model" })
-                        ?.ToString()
-                        ?.Trim();
-        return $"{manufacturer} {model}".Trim();
-      }
-    } catch {
+    } catch (Exception ex) {
+      Logger.Error("GetModel: err: {0}", ex);
     }
-
     return null;
   }
   public static string? GetLocalAppDataPath() {
@@ -266,5 +145,33 @@ internal static class MachineTools {
       name = name.Replace(c, '_');
     }
     return name;
+  }
+  [DllImport("ntdll.dll", SetLastError = true)]
+  private static extern int RtlGetVersion(ref OSVERSIONINFOEX versionInfo);
+
+  [StructLayout(LayoutKind.Sequential)]
+  struct OSVERSIONINFOEX {
+    public int dwOSVersionInfoSize;
+    public int dwMajorVersion;
+    public int dwMinorVersion;
+    public int dwBuildNumber;
+    public int dwPlatformId;
+
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+    public string szCSDVersion;
+  }
+  public static Version GetOSVersion() {
+    try {
+      var osvi = new OSVERSIONINFOEX();
+      osvi.dwOSVersionInfoSize = Marshal.SizeOf(osvi);
+      int status = RtlGetVersion(ref osvi);
+      if (status == 0) // STATUS_SUCCESS
+      {
+        return new Version(osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+      }
+    } catch (Exception ex) {
+      Logger.Error("GetOSVersion threw: {0}", ex);
+    }
+    return Environment.OSVersion.Version; // fallback
   }
 }

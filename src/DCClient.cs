@@ -143,7 +143,7 @@ namespace DataCortex {
       _googleTag = GetSavedUserTagWithName("Google");
       _gameCenterTag = GetSavedUserTagWithName("GameCenter");
 
-      var found_device_tag = _settings.Load<string>(DEVICE_TAG_KEY);
+      string? found_device_tag = _settings.Load<string>(DEVICE_TAG_KEY);
       if (found_device_tag != null && found_device_tag.Length > 0) {
         _deviceTag = found_device_tag;
       } else {
@@ -159,8 +159,9 @@ namespace DataCortex {
       }
 
       _os = GetOSType();
-      Version osVersion = Environment.OSVersion.Version;
-      _osVersion = $"{osVersion.Major}.{osVersion.Minor}.{osVersion.Build}";
+      var os_ver = MachineTools.GetOSVersion();
+      Logger.Info("os_ver: {0}", os_ver);
+      _osVersion = $"{os_ver.Major}.{os_ver.Minor}.{os_ver.Build}";
       _deviceType = MachineTools.GetModel() ?? "unknown";
       _deviceFamily = GetDeviceFamily();
       _country = RegionInfo.CurrentRegion.TwoLetterISORegionName;

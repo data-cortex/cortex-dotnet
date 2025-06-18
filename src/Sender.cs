@@ -20,7 +20,7 @@ internal abstract class Sender<T> {
 
   internal readonly JsonSerializerOptions JSON_OPTIONS =
       new JsonSerializerOptions {
-        IgnoreNullValues = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new CustomDateTimeConverter() }
       };
 
@@ -213,7 +213,10 @@ internal abstract class Sender<T> {
         return new List<T>();
       }
       string json = File.ReadAllText(path);
-      return JsonSerializer.Deserialize<List<T>>(json);
+      var ret = JsonSerializer.Deserialize<List<T>>(json);
+      if (ret != null) {
+        return ret;
+      }
     } catch (Exception ex) {
       Logger.Error("Sender.Load error: {0}", ex);
     }
