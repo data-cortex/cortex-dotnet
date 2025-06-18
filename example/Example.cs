@@ -33,7 +33,7 @@ class Example {
       DCShared.Log(new DCLogEvent { LogLine = "foo", Hostname = "foo" });
       Console.WriteLine("1 log event");
 
-      DCShared.Instance.UserTag = "test123";
+      DCShared.Instance.UserTag = "userToptest";
       DCShared.Event(new DCEvent { Kingdom = "after usertag" });
       DCShared.Log(new DCLogEvent { LogLine = "after usertag", Hostname = "foo" });
 
@@ -83,14 +83,6 @@ class Example {
         LogLine = "Second event with fewer overrides"
       });
 
-      DCShared.Log(new DCLogEvent { LogLine = "before device tag" });
-      DCShared.Instance.DeviceTag = "device999";
-      DCShared.Instance.UserTag = "user987654321";
-      DCShared.Log(new DCLogEvent { LogLine = "after device tag" });
-      DCShared.Log(new DCLogEvent { LogLine = "Another thingy" });
-      DCShared.Event(new DCEvent { Kingdom = "kingdom", Species = "species" });
-
-      await DCShared.Flush();
 
       DCShared.Instance.ServerVersion = "s123";
       DCShared.Instance.ConfigVersion = "c345";
@@ -176,6 +168,17 @@ class Example {
 
       Console.WriteLine("Sleep 1...");
       Thread.Sleep(1);
+      await DCShared.Flush();
+
+      DCShared.Event(new DCEvent { Kingdom = "before device and user tag", Species = "species" });
+      DCShared.Log(new DCLogEvent { LogLine = "before device and user tag" });
+      await DCShared.Flush();
+      DCShared.Instance.DeviceTag = "device999";
+      DCShared.Instance.UserTag = "user999";
+      DCShared.Log(new DCLogEvent { LogLine = "after device tag" });
+      DCShared.Log(new DCLogEvent { LogLine = "Another thingy" });
+      DCShared.Event(new DCEvent { Kingdom = "after device and user tag", Species = "species" });
+
       await DCShared.Flush();
       Console.WriteLine("done done");
     } catch (Exception ex) {
