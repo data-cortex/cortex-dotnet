@@ -11,7 +11,7 @@ internal class EventSender : Sender<DCEvent> {
   private const int DAU_INTERVAL = 10 * 60;
   private int _eventIndex = 1;
 
-  public EventSender(DCClient dc) : base("EventSender", "/1/track", dc) {}
+  public EventSender(DCClient dc) : base("EventSender", "/1/track", dc) { }
   public override void AddEventQueue(DCEvent e) {
     e.EventIndex = _eventIndex++;
     base.AddEventQueue(e);
@@ -19,15 +19,17 @@ internal class EventSender : Sender<DCEvent> {
 
   internal override string MakePayload(ImmutableList<DCEvent> list) {
     var r =
-        new Dictionary<string, object> { ["api_key"] = _dc._apiKey,
-                                         ["app_ver"] = _dc._appVersion,
-                                         ["device_family"] = _dc._deviceFamily,
-                                         ["os_ver"] = _dc._osVersion,
-                                         ["device_tag"] = _dc._deviceTag,
-                                         ["device_type"] = _dc._deviceType,
-                                         ["language"] = _dc._language,
-                                         ["country"] = _dc._country,
-                                         ["os"] = _dc._os };
+        new Dictionary<string, object> {
+          ["api_key"] = _dc._apiKey,
+          ["app_ver"] = _dc._appVersion,
+          ["device_family"] = _dc._deviceFamily,
+          ["os_ver"] = _dc._osVersion,
+          ["device_tag"] = _dc._deviceTag,
+          ["device_type"] = _dc._deviceType,
+          ["language"] = _dc._language,
+          ["country"] = _dc._country,
+          ["os"] = _dc._os
+        };
     if (_dc._userTag != null) {
       r["user_tag"] = _dc._userTag;
     }

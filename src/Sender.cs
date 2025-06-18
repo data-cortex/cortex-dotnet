@@ -23,7 +23,8 @@ internal abstract class Sender<T> {
 
   internal readonly JsonSerializerOptions JSON_OPTIONS =
       new JsonSerializerOptions {
-        IgnoreNullValues = true, Converters = { new CustomDateTimeConverter() }
+        IgnoreNullValues = true,
+        Converters = { new CustomDateTimeConverter() }
       };
 
   internal DCClient _dc;
@@ -80,8 +81,10 @@ internal abstract class Sender<T> {
     var urlString = $"{_dc._baseURL}{_path}?current_time={GetISO8601Date()}";
     Logger.Info("urlString: {0}", urlString);
     var url = new Uri(urlString);
-    using (var client = new HttpClient { Timeout = TimeSpan.FromSeconds(
-                                             HTTP_TIMEOUT) }) {
+    using (var client = new HttpClient {
+      Timeout = TimeSpan.FromSeconds(
+                                             HTTP_TIMEOUT)
+    }) {
       var request = new HttpRequestMessage(HttpMethod.Post, url);
       request.Headers.Add("Accept", "application/json");
       var json = MakePayload(list);
@@ -99,10 +102,10 @@ internal abstract class Sender<T> {
             var body = await response.Content.ReadAsStringAsync();
             Logger.Error($"Bad send 400: Body: {body}");
           } else if (response.StatusCode ==
-                     System.Net.HttpStatusCode.Forbidden) {
+                       System.Net.HttpStatusCode.Forbidden) {
             Logger.Error("Bad authentication (403), please check your API Key");
           } else if (response.StatusCode ==
-                     System.Net.HttpStatusCode.Conflict) {
+                       System.Net.HttpStatusCode.Conflict) {
             Logger.Error("Conflict (409), dup send?");
           } else {
             var body = await response.Content.ReadAsStringAsync();
