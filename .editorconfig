@@ -15,4 +15,6 @@ csharp_new_line_before_open_brace = none
 csharp_new_line_before_else = false
 csharp_new_line_before_catch = false
 csharp_new_line_before_finally = false
-dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0005.severity = error
+dotnet_diagnostic.IDE0011.severity = error
+csharp_prefer_braces = always:error

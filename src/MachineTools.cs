@@ -8,25 +8,31 @@ using System.Runtime.InteropServices;
 internal static class MachineTools {
   public static string GetMachineIdentifier() {
     var adid = TryGetAdvertisingId();
+    Logger.Info("adid {0}", adid);
     if (adid != null) {
       return adid;
     }
     var smbios = TryGetWmiDynamic("Win32_ComputerSystemProduct", "UUID");
+    Logger.Info("smbios {0}", smbios);
     if (smbios != null) {
       return Normalize(smbios);
     }
     var board = TryGetWmiDynamic("Win32_BaseBoard", "SerialNumber");
+    Logger.Info("board {0}", board);
     if (board != null) {
       return HashHex(board);
     }
     var bios = TryGetWmiDynamic("Win32_BIOS", "SerialNumber");
+    Logger.Info("bios {0}", bios);
     if (bios != null) {
       return HashHex(bios);
     }
     var volume = TryGetVolumeSerialDynamic("C");
+    Logger.Info("volume {0}", volume);
     if (volume != null) {
       return HashHex(volume);
     }
+    Logger.Info("guid");
     return Guid.NewGuid().ToString();
   }
   public static string? TryGetAdvertisingId() {
@@ -188,8 +194,9 @@ internal static class MachineTools {
     }
   }
   public static string? GetModel() {
-    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
       return null;
+    }
 
     try {
       var managementAssembly =
@@ -197,16 +204,18 @@ internal static class MachineTools {
               a => a.GetName().Name == "System.Management") ??
           Assembly.Load("System.Management");
 
-      if (managementAssembly == null)
+      if (managementAssembly == null) {
         return null;
+      }
 
       var searcherType = managementAssembly.GetType(
           "System.Management.ManagementObjectSearcher");
       var objectType =
           managementAssembly.GetType("System.Management.ManagementObject");
 
-      if (searcherType == null || objectType == null)
+      if (searcherType == null || objectType == null) {
         return null;
+      }
 
       using var searcher = (IDisposable)Activator.CreateInstance(
           searcherType, "SELECT * FROM Win32_ComputerSystem");
@@ -214,8 +223,9 @@ internal static class MachineTools {
       var getMethod = searcherType.GetMethod("Get");
       var results = getMethod.Invoke(searcher, null) as IEnumerable;
 
-      if (results == null)
+      if (results == null) {
         return null;
+      }
 
       foreach (var mo in results) {
         var itemProperty = mo.GetType().GetProperty("Item");
@@ -252,8 +262,9 @@ internal static class MachineTools {
     return ret;
   }
   private static string Sanitize(string name) {
-    foreach (char c in Path.GetInvalidFileNameChars())
+    foreach (char c in Path.GetInvalidFileNameChars()) {
       name = name.Replace(c, '_');
+    }
     return name;
   }
 }

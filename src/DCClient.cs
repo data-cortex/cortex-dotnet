@@ -236,12 +236,18 @@ namespace DataCortex {
       }
     }
     private string GetOSType() {
-      if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+      if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
         return "win32";
-      if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+      }
+
+      if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
         return "darwin";
-      if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+      }
+
+      if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) {
         return "linux";
+      }
+
       return "unknown";
     }
     private string GetDeviceFamily() {
