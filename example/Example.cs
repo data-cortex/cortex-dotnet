@@ -33,7 +33,11 @@ class Example {
       DCShared.Log(new DCLogEvent { LogLine = "foo", Hostname = "foo" });
       Console.WriteLine("1 log event");
 
-      DCShared.Instance.UserTag = "userToptest";
+
+      Console.WriteLine("before user tag set: {0}", DCShared.Instance.UserTag);
+      await DCShared.Flush();
+      DCShared.Instance.UserTag = "user" + (new Random()).Next(1000, 9000);
+      Console.WriteLine("after user tag set: {0}", DCShared.Instance.UserTag);
       DCShared.Event(new DCEvent { Kingdom = "after usertag" });
       DCShared.Log(new DCLogEvent { LogLine = "after usertag", Hostname = "foo" });
 
@@ -86,6 +90,7 @@ class Example {
 
       DCShared.Instance.ServerVersion = "s123";
       DCShared.Instance.ConfigVersion = "c345";
+      Console.WriteLine("set server, config");
 
       DCShared.Event(new DCEvent {
         GroupTag = "group",
@@ -166,18 +171,21 @@ class Example {
         LogLine = "Log line from log event"
       });
 
+      Console.WriteLine("done full events");
       Console.WriteLine("Sleep 1...");
       Thread.Sleep(1);
       await DCShared.Flush();
 
       DCShared.Event(new DCEvent { Kingdom = "before device and user tag", Species = "species" });
       DCShared.Log(new DCLogEvent { LogLine = "before device and user tag" });
+      Console.WriteLine("pre-device and user tag reset");
       await DCShared.Flush();
       DCShared.Instance.DeviceTag = "device999";
       DCShared.Instance.UserTag = "user999";
       DCShared.Log(new DCLogEvent { LogLine = "after device tag" });
       DCShared.Log(new DCLogEvent { LogLine = "Another thingy" });
       DCShared.Event(new DCEvent { Kingdom = "after device and user tag", Species = "species" });
+      Console.WriteLine("adter-device and user tag reset");
 
       await DCShared.Flush();
       Console.WriteLine("done done");
