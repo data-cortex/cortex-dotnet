@@ -229,7 +229,7 @@ namespace DataCortex {
     }
     public void LogError(string format, params object[] args) {
       var s = LogToString(format, args);
-      _logSender.AddEvent(new DCLogEvent { LogLine = s });
+      _logSender.AddEvent(new DCLogEvent { LogLine = s, LogLevel = "error" });
     }
     public async Task Flush() {
       while (!await _eventSender.IsEmpty() && !await _logSender.IsEmpty()) {

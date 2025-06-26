@@ -2,7 +2,7 @@
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <PackageId>DataCortex</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Authors>Jim Lake</Authors>
     <Description>Data Cortex Client Library</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
