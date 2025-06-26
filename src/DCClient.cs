@@ -224,11 +224,11 @@ namespace DataCortex {
       _logSender.AddEvent(e);
     }
     public void Log(string format, params object[] args) {
-      var s = string.Format(CultureInfo.InvariantCulture, format, args);
+      var s = LogToString(format, args);
       _logSender.AddEvent(new DCLogEvent { LogLine = s });
     }
     public void LogError(string format, params object[] args) {
-      var s = string.Format(CultureInfo.InvariantCulture, format, args);
+      var s = LogToString(format, args);
       _logSender.AddEvent(new DCLogEvent { LogLine = s });
     }
     public async Task Flush() {
@@ -264,6 +264,13 @@ namespace DataCortex {
               "Missing required value spendAmount for economy event");
         }
       }
+    }
+    private string LogToString(string format, params object[] args) {
+      var ret = format;
+      if (args != null && args.Length > 0) {
+        ret = string.Format(CultureInfo.InvariantCulture, format, args);
+      }
+      return ret;
     }
     private void ValidateLogEvent(DCLogEvent e) {
       if (e.LogLine == null || e.LogLine.Length == 0) {

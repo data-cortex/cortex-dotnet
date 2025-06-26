@@ -17,9 +17,9 @@ class Example {
       if (DCShared.Instance == null) {
         throw new Exception("Init failed");
       }
-
       DCShared.Log("Test 123");
       Console.WriteLine("Wrote Test 123");
+
 
       DCShared.Log(
           new DCLogEvent { LogLine = "Test 456", Hostname = "hostname" });
@@ -33,8 +33,16 @@ class Example {
       DCShared.Log(new DCLogEvent { LogLine = "foo", Hostname = "foo" });
       Console.WriteLine("1 log event");
 
-
       Console.WriteLine("before user tag set: {0}", DCShared.Instance.UserTag);
+
+      DCShared.Log("This is invalid {1357176} but should work");
+      try {
+        DCShared.Log("This will throw {1357176} this one", 123);
+        Console.Error.WriteLine("!!!!!!!!!!!!!! Should have thrown!!!!!!!!!");
+      } catch {
+        Console.WriteLine($"Threw as expected");
+      }
+
       await DCShared.Flush();
       DCShared.Instance.UserTag = "user" + (new Random()).Next(1000, 9000);
       Console.WriteLine("after user tag set: {0}", DCShared.Instance.UserTag);
